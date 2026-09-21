@@ -1,6 +1,8 @@
 ﻿using DVSRegister.Data;
 using DVSRegister.Data.Entities;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Testcontainers.PostgreSql;
 
 namespace DVSRegister.UnitTests.Repository
@@ -32,10 +34,21 @@ namespace DVSRegister.UnitTests.Repository
                 .Options;
 
             DbContext = new DVSRegisterDbContext(options);
+            DbContext.Database.Migrate();
             SeedDatabase();
         }
 
         public async Task ResetAsync()
+        {
+            await ResetDatabaseAsync();
+        }
+
+        public async Task ResetToMigrationAsync(string targetMigration)
+        {
+            await ResetDatabaseAsync(targetMigration);
+        }
+
+        private async Task ResetDatabaseAsync(string? targetMigration = null)
         {
             await DbContext.DisposeAsync();
             var options = new DbContextOptionsBuilder<DVSRegisterDbContext>()
@@ -44,13 +57,20 @@ namespace DVSRegister.UnitTests.Repository
 
             DbContext = new DVSRegisterDbContext(options);
             await DbContext.Database.EnsureDeletedAsync();
-            await DbContext.Database.MigrateAsync();
+            if (targetMigration == null)
+            {
+                await DbContext.Database.MigrateAsync();
+            }
+            else
+            {
+                var migrator = DbContext.Database.GetService<IMigrator>();
+                await migrator.MigrateAsync(targetMigration);
+            }
             SeedDatabase();
         }
 
         private void SeedDatabase()
         {
-            DbContext.Database.Migrate();
             DbContext.User.Add(new User { UserName = "test.user@dsit.gov.com", Email = "test.user@dsit.gov.com", Profile = "DSIT", CreatedDate = DateTime.UtcNow });
             DbContext.User.Add(new User { UserName = "test.user123@dsit.gov.com", Email = "test.user123@dsit.gov.com", Profile = "DSIT", CreatedDate = DateTime.UtcNow });
 
